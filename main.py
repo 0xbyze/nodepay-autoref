@@ -3,7 +3,7 @@ import random
 import string
 import time
 from typing import Optional, Tuple, Dict
-import requests
+from curl_cffi import requests
 from colorama import Fore, Style, init
 from faker import Faker
 from datetime import datetime
@@ -158,6 +158,7 @@ class ReferralClient:
         self.email = None
         self.password = None
         self.max_retries = 5
+        self.session = requests.Session()
         
     async def _get_captcha_with_retry(self, captcha_service, step: str = "unknown") -> Optional[str]:
         for attempt in range(1, self.max_retries + 1):
@@ -254,21 +255,28 @@ class ReferralClient:
         self._update_proxy()
         headers = self._get_headers(auth_token)
         url = ApiEndpoints.get_url(endpoint)
-
+        
+        impersonate = "chrome110"
+        
         try:
             response = await asyncio.to_thread(
-                lambda: requests.request(
+                lambda: self.session.request(
                     method=method,
                     url=url,
                     headers=headers,
                     json=json_data,
                     proxies=self.current_proxy,
-                    timeout=30
+                    timeout=30,
+                    impersonate=impersonate
                 )
             )
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            log_step(f"Request failed: {str(e)}", "error")
+            
+            try:
+                return response.json()
+            except Exception:
+                return {"success": False, "msg": f"Invalid response: {response.text[:100]}"}
+                
+        except Exception as e:
             return {"success": False, "msg": str(e)}
 
     async def login(self, captcha_service) -> Optional[str]:
